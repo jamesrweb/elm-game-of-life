@@ -1,4 +1,4 @@
-module GameOfLife exposing (Board(..), Cell(..), Coordinate(..), Grid, Model(..), Msg(..), main)
+module GameOfLife exposing (Board(..), Cell(..), CellState, Coordinate(..), Grid, Model(..), Msg(..), main)
 
 import Array exposing (Array)
 import Browser
@@ -33,14 +33,9 @@ type Model
     | Loaded Board
 
 
-alive : Char
-alive =
-    '+'
-
-
-empty : Char
-empty =
-    '.'
+type CellState
+    = Alive
+    | Empty
 
 
 width : number
@@ -50,19 +45,19 @@ width =
 
 height : number
 height =
-    64
+    32
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( Loading
-    , Random.generate GotInitialState <| Random.list (width * height) <| Random.uniform empty [ alive ]
+    , Random.generate GotInitialState <| Random.list (width * height) <| Random.weighted ( 80, Empty ) [ ( 20, Alive ) ]
     )
 
 
 type Msg
     = AnimationFrameTick
-    | GotInitialState (List Char)
+    | GotInitialState (List CellState)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -123,10 +118,18 @@ toRow =
 
 
 toCell : Cell -> Html Msg
-toCell (Cell ( _, symbol )) =
-    Html.text (String.fromChar symbol)
+toCell (Cell ( _, state )) =
+    Html.text
+        (String.fromChar <|
+            case state of
+                Alive ->
+                    '+'
+
+                Empty ->
+                    '_'
+        )
         |> List.singleton
-        |> Html.span [ Html.Attributes.classList [ ( "font-bold", symbol == alive ) ] ]
+        |> Html.span [ Html.Attributes.classList [ ( "font-bold", state == Alive ) ] ]
 
 
 type Coordinate
@@ -134,7 +137,7 @@ type Coordinate
 
 
 type Cell
-    = Cell ( Coordinate, Char )
+    = Cell ( Coordinate, CellState )
 
 
 countNeighbours : Grid -> Cell -> Int
@@ -164,60 +167,28 @@ evolve (Board board) =
 
 evolveCell : ( Int, Int ) -> Grid -> Grid
 evolveCell ( x, y ) grid =
-    if x >= 0 && y >= 0 && x < width && y < height then
-        Array.get y grid
-            |> Maybe.andThen (Array.get x)
-            |> Maybe.map (\cell -> evolveCellHelper { cell = cell, grid = grid })
-            |> Maybe.withDefault grid
-
-    else
-        grid
+    Array.get y grid
+        |> Maybe.andThen (Array.get x)
+        |> Maybe.map (\cell -> evolveCellHelper { cell = cell, grid = grid })
+        |> Maybe.withDefault grid
 
 
 evolveCellHelper : { cell : Cell, grid : Grid } -> Grid
 evolveCellHelper { cell, grid } =
     let
-        (Cell ( (Coordinate ( x, y )) as coords, symbol )) =
+        (Cell ( (Coordinate ( x, y )) as coords, _ )) =
             cell
 
-        neighbours : Int
-        neighbours =
-            countNeighbours grid cell
-
-        nextSymbol : Char
-        nextSymbol =
-            if symbol == alive then
-                if List.range 0 1 |> List.member neighbours then
-                    empty
-
-                else if List.range 4 8 |> List.member neighbours then
-                    empty
-
-                else if List.range 2 3 |> List.member neighbours then
-                    alive
-
-                else
-                    symbol
-
-            else if symbol == empty then
-                if neighbours == 3 then
-                    alive
-
-                else if List.range 0 8 |> List.member neighbours then
-                    empty
-
-                else
-                    symbol
-
-            else
-                symbol
+        nextState : CellState
+        nextState =
+            resolveNextCellState grid cell
     in
     Array.indexedMap
         (\rowIndex row ->
             Array.indexedMap
                 (\columnIndex column ->
                     if columnIndex == x && rowIndex == y then
-                        Cell ( coords, nextSymbol )
+                        Cell ( coords, nextState )
 
                     else
                         column
@@ -227,9 +198,55 @@ evolveCellHelper { cell, grid } =
         grid
 
 
+resolveNextCellState : Grid -> Cell -> CellState
+resolveNextCellState grid ((Cell ( _, state )) as cell) =
+    if state == Alive then
+        resolveAliveCellNextState grid cell
+
+    else
+        resolveEmptyCellNextState grid cell
+
+
+resolveEmptyCellNextState : Grid -> Cell -> CellState
+resolveEmptyCellNextState grid ((Cell ( _, state )) as cell) =
+    let
+        neighbours : Int
+        neighbours =
+            countNeighbours grid cell
+    in
+    if neighbours == 3 then
+        Alive
+
+    else if List.range 0 8 |> List.member neighbours then
+        Empty
+
+    else
+        state
+
+
+resolveAliveCellNextState : Grid -> Cell -> CellState
+resolveAliveCellNextState grid ((Cell ( _, state )) as cell) =
+    let
+        neighbours : Int
+        neighbours =
+            countNeighbours grid cell
+    in
+    if List.range 0 1 |> List.member neighbours then
+        Empty
+
+    else if List.range 4 8 |> List.member neighbours then
+        Empty
+
+    else if List.range 2 3 |> List.member neighbours then
+        Alive
+
+    else
+        state
+
+
 isValidNeighbour : Grid -> Coordinate -> Bool
 isValidNeighbour grid (Coordinate ( x, y )) =
     Array.get y grid
         |> Maybe.andThen (Array.get x)
-        |> Maybe.map (\(Cell ( _, symbol )) -> symbol == alive)
+        |> Maybe.map (\(Cell ( _, state )) -> state == Alive)
         |> Maybe.withDefault False
