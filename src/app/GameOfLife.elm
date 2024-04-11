@@ -1,4 +1,4 @@
-module GameOfLife exposing (Board(..), Cell(..), CellState, Coordinate(..), Grid, Model(..), Msg(..), main)
+module GameOfLife exposing (Board(..), Cell(..), CellState, Coordinate(..), Grid, Model(..), Msg(..), Row, main)
 
 import Array exposing (Array)
 import Browser
@@ -20,8 +20,12 @@ main =
         }
 
 
+type alias Row =
+    Array Cell
+
+
 type alias Grid =
-    Array (Array Cell)
+    Array Row
 
 
 type Board
@@ -77,12 +81,11 @@ update msg model =
                 grid =
                     List.Extra.greedyGroupsOf width chars
                         |> List.indexedMap
-                            (\rowIndex row ->
+                            (\rowIndex ->
                                 List.indexedMap
-                                    (\columnIndex column ->
-                                        Cell ( Coordinate ( columnIndex, rowIndex ), column )
+                                    (\columnIndex state ->
+                                        Cell ( Coordinate ( columnIndex, rowIndex ), state )
                                     )
-                                    row
                             )
                         |> List.map Array.fromList
                         |> Array.fromList
@@ -112,7 +115,7 @@ viewBoard (Board grid) =
     Html.article [ Html.Attributes.class "grid h-dvh place-items-center font-mono text-sm" ] <| (Array.map toRow grid |> Array.toList |> Html.div [ Html.Attributes.class "grid gap-2" ] |> List.singleton)
 
 
-toRow : Array Cell -> Html Msg
+toRow : Row -> Html Msg
 toRow =
     Array.map toCell >> Array.toList >> Html.div [ Html.Attributes.class "flex gap-2" ]
 
@@ -176,26 +179,38 @@ evolveCell ( x, y ) grid =
 evolveCellHelper : { cell : Cell, grid : Grid } -> Grid
 evolveCellHelper { cell, grid } =
     let
-        (Cell ( (Coordinate ( x, y )) as coords, _ )) =
+        (Cell ( coords, _ )) =
             cell
 
         nextState : CellState
         nextState =
             resolveNextCellState grid cell
     in
-    Array.indexedMap
-        (\rowIndex row ->
-            Array.indexedMap
-                (\columnIndex column ->
-                    if columnIndex == x && rowIndex == y then
-                        Cell ( coords, nextState )
+    Array.indexedMap (transformRow coords nextState) grid
 
-                    else
-                        column
-                )
-                row
+
+transformRow : Coordinate -> CellState -> Int -> Row -> Row
+transformRow coords nextState rowIndex =
+    Array.indexedMap
+        (transformCell
+            { coords = coords
+            , nextState = nextState
+            , rowIndex = rowIndex
+            }
         )
-        grid
+
+
+transformCell : { coords : Coordinate, nextState : CellState, rowIndex : Int } -> Int -> Cell -> Cell
+transformCell { coords, nextState, rowIndex } cellIndex cell =
+    let
+        (Coordinate ( x, y )) =
+            coords
+    in
+    if cellIndex == x && rowIndex == y then
+        Cell ( coords, nextState )
+
+    else
+        cell
 
 
 resolveNextCellState : Grid -> Cell -> CellState
