@@ -1,0 +1,26 @@
+{
+  "name": "elm-game-of-life",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "format": "elm-format . --yes && prettier --config prettier.config.json --ignore-path .gitignore . --write",
+    "lint": "elm-review",
+    "lint:fix": "elm-review --fix"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.0.0-alpha.14",
+    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
+    "elm-format": "^0.8.7",
+    "elm-review": "^2.11.1",
+    "prettier": "^3.2.5",
+    "tailwindcss": "4.0.0-alpha.14",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
+  },
+  "dependencies": {
+    "vite-plugin-elm": "^3.0.0"
+  }
+}
